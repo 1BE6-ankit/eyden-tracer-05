@@ -52,6 +52,9 @@ public:
 		ray.hit = NULL;
 	}
 
+	Vec3f getMPos() const {
+        return m_pos;
+    }
 
 private:
 	// input values

@@ -50,6 +50,25 @@ public:
 		Ray shadow;
 		shadow.org = ray.org + ray.t * ray.dir;
 
+        CCameraPerspective* globalCam = m_scene.m_pCamera.get();
+        Vec3f resReflect(0, 0, 0);
+        Ray rayReflect;
+        rayReflect.org = ray.org + ray.t * ray.dir;
+        rayReflect.dir = reflect;
+        rayReflect.t = std::numeric_limits<float>::infinity();
+
+        // now we use the reflection vector to create a new ray at the point of intersection:
+        // get global camera
+        bool onReflection = false;
+        if(globalCam != NULL)
+            // check if we are working on a primary ray or a reflected ray
+            if(globalCam->getMPos() == ray.org) {
+                // get shading for reflection
+                resReflect = m_scene.RayTrace(rayReflect);
+                if(rayReflect.t != std::numeric_limits<float>::infinity())
+                    onReflection = true;
+            }
+
 		// iterate over all light sources
 		for (auto pLight : m_scene.m_vpLights)
 			for(int s = 0; s < nAreaSamples; s++) {	// TODO: make the sampling to depend on the light source type
@@ -81,6 +100,9 @@ public:
 		for (int i = 0; i < 3; i++)
 			if (res.val[i] > 1) res.val[i] = 1;
 		
+        if(onReflection)
+            return 0.1 * res + resReflect;
+
 		return res;
 	}
 
