@@ -15,4 +15,6 @@ struct Ray
 	const CPrim*	hit;		///< Pointer to currently closest primitive
 	float			u;			///< Barycentric u coordinate
 	float			v;			///< Barycentric v coordinate
+    int reflectDepth;
+    int refractDepth;
 };

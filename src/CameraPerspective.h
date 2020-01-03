@@ -50,6 +50,8 @@ public:
 		ray.dir = normalize(m_aspect * sscx * m_xAxis + sscy * m_yAxis + m_focus * m_zAxis);
 		ray.t = std::numeric_limits<float>::infinity();
 		ray.hit = NULL;
+        ray.reflectDepth = 0;
+        ray.refractDepth = 0;
 	}
 
 	Vec3f getMPos() const {

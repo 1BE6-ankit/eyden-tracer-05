@@ -10,7 +10,8 @@ struct Ray;
 class IShader
 {
 public:
-	IShader(void) = default;
+	// IShader(void) = default;
+    IShader(bool isOpaque = true) : isOpaque(isOpaque) {}
 	IShader(const IShader&) = delete;
 	virtual ~IShader(void) = default;
 	const IShader& operator=(const IShader&) = delete;
@@ -22,4 +23,11 @@ public:
 	 * @return The color of the hit objesct
 	 */
 	virtual Vec3f Shade(const Ray& ray) const = 0;
+
+    virtual bool getIsOpaque() const {
+        return isOpaque;
+    }
+
+protected:
+    bool isOpaque; // flag to indicate if a surface is opaque
 };

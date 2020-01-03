@@ -17,8 +17,8 @@ public:
 	 * @param ks The specular refelection coefficients
 	 * @param ke The shininess exponent
 	 */
-	CShaderPhong(CScene& scene, Vec3f color, float ka, float kd, float ks, float ke)
-		: CShaderFlat(color)
+	CShaderPhong(CScene& scene, Vec3f color, float ka, float kd, float ks, float ke, bool isOpaque = true)
+		: CShaderFlat(color, isOpaque)
 		, m_scene(scene)
 		, m_ka(ka)
 		, m_kd(kd)
@@ -50,24 +50,38 @@ public:
 		Ray shadow;
 		shadow.org = ray.org + ray.t * ray.dir;
 
-        CCameraPerspective* globalCam = m_scene.m_pCamera.get();
+        /**
+         * For Reflection
+        */
         Vec3f resReflect(0, 0, 0);
-        Ray rayReflect;
-        rayReflect.org = ray.org + ray.t * ray.dir;
-        rayReflect.dir = reflect;
-        rayReflect.t = std::numeric_limits<float>::infinity();
+        bool onReflection = false;
 
         // now we use the reflection vector to create a new ray at the point of intersection:
-        // get global camera
-        bool onReflection = false;
-        if(globalCam != NULL)
-            // check if we are working on a primary ray or a reflected ray
-            if(globalCam->getMPos() == ray.org) {
-                // get shading for reflection
+        if(!isOpaque) {
+        // if(!isOpaque && 0==1) {
+            onReflection = true;
+
+            Ray rayReflect;
+            rayReflect.org = ray.org + ray.t * ray.dir;
+            rayReflect.dir = reflect;
+            rayReflect.t = std::numeric_limits<float>::infinity();
+            rayReflect.reflectDepth = ray.reflectDepth + 1;
+
+            if(ray.reflectDepth <= MAX_REFLECT_DEPTH) {
                 resReflect = m_scene.RayTrace(rayReflect);
-                if(rayReflect.t != std::numeric_limits<float>::infinity())
-                    onReflection = true;
+            }else {
+                onReflection = false;
             }
+
+            if(rayReflect.t == std::numeric_limits<float>::infinity())
+                onReflection = false;
+        }
+
+        if(onReflection && ray.reflectDepth != 0) {
+            return resReflect;
+        }
+
+
 
 		// iterate over all light sources
 		for (auto pLight : m_scene.m_vpLights)
@@ -78,8 +92,10 @@ public:
 					// diffuse term
 					float cosLightNormal = shadow.dir.dot(normal);
 					if (cosLightNormal > 0) {
-						if (m_scene.Occluded(shadow))
-							continue;
+						if (m_scene.Occluded(shadow)) {
+                            if(shadow.hit->getShader().get()->getIsOpaque()) 
+                                continue;
+                        }
 
 						Vec3f diffuseColor = m_kd * color;
 						res += (diffuseColor * cosLightNormal).mul(lightIntensity.value());
@@ -97,12 +113,13 @@ public:
 		if (nAreaSamples > 1)
 			res /= nAreaSamples;
 
+        if(onReflection && ray.reflectDepth == 0) {
+            res = resReflect + 0.2 * res;
+        }
+
 		for (int i = 0; i < 3; i++)
 			if (res.val[i] > 1) res.val[i] = 1;
 		
-        if(onReflection)
-            return 0.1 * res + resReflect;
-
 		return res;
 	}
 
@@ -113,4 +130,6 @@ private:
 	float 	m_kd;    ///< diffuse reflection coefficients
 	float 	m_ks;    ///< specular refelection coefficients
 	float 	m_ke;    ///< shininess exponent
+    const int MAX_REFLECT_DEPTH = 2;
+    const int MAX_REFRACT_DEPTH = 1;
 };
