@@ -59,8 +59,6 @@ public:
         Vec3f resReflect(0, 0, 0);
         bool onReflection = false;
 #ifndef REFLECT_OFF
-        // when ray.refractDepth %2 == 1, there reflection is inside the 
-        // dense medium so we don't take that into account
         if(!isOpaque && ray.refractDepth == 0) {
             onReflection = true;
 
@@ -110,23 +108,25 @@ public:
             // part of formula to calculate refracted ray direction
             float sqrtVal = sqrt(1 - pow(n, 2) * (1 - pow(nDotI, 2))); 
 
-            if(isnan(sqrtVal)) {
+            if(isnan(sqrtVal) ) {
                 // total internal reflection
-                onRefraction = false;
+                refractRay.dir = reflect;
+                refractRay.t = std::numeric_limits<float>::infinity();
+                refractRay.refractDepth = ray.refractDepth + 2;
+                refractRay.reflectDepth = ray.reflectDepth;
             } else {
                 // use the formula to calculate direction vector of the refraction ray
                 refractRay.dir = normalize(n * (ray.dir + refrNormal * nDotI) - refrNormal * sqrtVal);
                 refractRay.t = std::numeric_limits<float>::infinity();
                 refractRay.refractDepth = ray.refractDepth + 1;
                 refractRay.reflectDepth = ray.reflectDepth;
-
-                if(ray.refractDepth <= MAX_REFRACT_DEPTH) {
-                    resRefract = m_scene.RayTrace(refractRay);
-                } else {
-                    onRefraction = false;
-                }
             }
 
+            if(ray.refractDepth <= MAX_REFRACT_DEPTH) {
+                resRefract = m_scene.RayTrace(refractRay);
+            } else {
+                onRefraction = false;
+            }
         }
 
         if(onRefraction && ray.refractDepth != 0) {

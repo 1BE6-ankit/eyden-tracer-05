@@ -18,7 +18,14 @@ void CScene::ParseOBJ(const std::string& fileName)
 		std::cout << "Parsing OBJFile : " << fileName << std::endl;
 
 		// std::shared_ptr<IShader> pShader = std::make_shared<CShaderPhong>(*this, RGB(1, 1, 1), 0.5f, 0.5f, 0, 0, false);
-		std::shared_ptr<IShader> pShader = std::make_shared<CShaderPhong>(*this, RGB(0.5, 0.5, 0.5), 0.5f, 0.5f, 0, 0, false);
+
+        // shader matching final shades of problem output
+		std::shared_ptr<IShader> pShader= std::make_shared<CShaderPhong>(*this, RGB(0.5, 0.5, 0.5), 0.5f, 0.5f, 0, 0, false);
+
+        // shader based on Problem 5.3
+		// std::shared_ptr<IShader> pShader = std::make_shared<CShaderPhong>(*this, RGB(0.5f, 0.5f, 0.5f), 0.0f, 0.1f, 2.0f, 80, false);
+
+
 		std::vector<Vec3f> vVertexes;
 		std::vector<Vec3f> vNormals;
 		std::vector<Vec2f> vTextures;
