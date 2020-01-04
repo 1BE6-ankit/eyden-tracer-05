@@ -3,6 +3,9 @@
 #include "ShaderFlat.h"
 #include "Scene.h"
 
+// #define REFLECT_OFF
+// #define REFRACT_OFF
+
 const int nAreaSamples = 1;
 
 class CShaderPhong : public CShaderFlat
@@ -55,9 +58,10 @@ public:
         */
         Vec3f resReflect(0, 0, 0);
         bool onReflection = false;
-
-        // now we use the reflection vector to create a new ray at the point of intersection:
-        if(!isOpaque) {
+#ifndef REFLECT_OFF
+        // when ray.refractDepth %2 == 1, there reflection is inside the 
+        // dense medium so we don't take that into account
+        if(!isOpaque && ray.refractDepth == 0) {
             onReflection = true;
 
             Ray rayReflect;
@@ -65,9 +69,10 @@ public:
             rayReflect.dir = reflect;
             rayReflect.t = std::numeric_limits<float>::infinity();
             rayReflect.reflectDepth = ray.reflectDepth + 1;
+            rayReflect.refractDepth = ray.refractDepth;
 
             if(ray.reflectDepth <= MAX_REFLECT_DEPTH) {
-                resReflect = m_scene.RayTrace(rayReflect);
+                resReflect =  m_scene.RayTrace(rayReflect);
             }else {
                 onReflection = false;
             }
@@ -76,6 +81,7 @@ public:
         if(onReflection && ray.reflectDepth != 0) {
             return resReflect;
         }
+#endif
 
         /**
          * For Refraction
@@ -84,7 +90,8 @@ public:
         Vec3f resRefract(0, 0, 0);
         bool onRefraction = false;
 
-        if(!isOpaque) {
+#ifndef REFRACT_OFF
+        if(!isOpaque && ray.reflectDepth == 0) {
             onRefraction = true;
             Vec3f refrNormal = normal;
             float nDotI = refrNormal.dot(ray.dir); 
@@ -92,28 +99,40 @@ public:
             // since normal was negated in the beginning, nDoI is always < 0
             nDotI = -nDotI;
 
-            if(ray.refractDepth % 2 == 1) {
+            if(ray.refractDepth % 2 == 1) 
                 std::swap(nAir, nGlass);
-            }
 
             float n = nAir / nGlass;
 
             Ray refractRay;
             refractRay.org = ray.org + ray.t * ray.dir;
-            refractRay.dir = normalize(n * (ray.dir + refrNormal * nDotI) - refrNormal * sqrt(1 - pow(n, 2) * (1 - pow(nDotI, 2))));
-            refractRay.t = std::numeric_limits<float>::infinity();
-            refractRay.refractDepth = ray.refractDepth + 1;
 
-            if(ray.refractDepth <= MAX_REFRACT_DEPTH) {
-                resRefract = m_scene.RayTrace(refractRay);
-            } else {
+            // part of formula to calculate refracted ray direction
+            float sqrtVal = sqrt(1 - pow(n, 2) * (1 - pow(nDotI, 2))); 
+
+            if(isnan(sqrtVal)) {
+                // total internal reflection
                 onRefraction = false;
+            } else {
+                // use the formula to calculate direction vector of the refraction ray
+                refractRay.dir = normalize(n * (ray.dir + refrNormal * nDotI) - refrNormal * sqrtVal);
+                refractRay.t = std::numeric_limits<float>::infinity();
+                refractRay.refractDepth = ray.refractDepth + 1;
+                refractRay.reflectDepth = ray.reflectDepth;
+
+                if(ray.refractDepth <= MAX_REFRACT_DEPTH) {
+                    resRefract = m_scene.RayTrace(refractRay);
+                } else {
+                    onRefraction = false;
+                }
             }
+
         }
 
         if(onRefraction && ray.refractDepth != 0) {
             return resRefract;
         }
+#endif
 
 		// iterate over all light sources
 		for (auto pLight : m_scene.m_vpLights)
@@ -146,24 +165,34 @@ public:
 		if (nAreaSamples > 1)
 			res /= nAreaSamples;
 
+        Vec3f resTemp(0, 0, 0);
+
+#ifndef REFLECT_OFF
         if(onReflection && ray.reflectDepth == 0) {
-            // res = resReflect + 0.2 * res;
             if(resReflect.val[0] == 0 && resReflect.val[1] == 0 && resReflect.val[2] == 0) {
-                res = res * 0.8;
-            }
-            else {
-                res = resReflect + res * 0.2;
+                resTemp += res * (1 - c_reflect);
+            } else {
+                #ifdef REFRACT_OFF
+                    resTemp += resReflect * (1 - c_reflect);
+                #else
+                    resTemp += resReflect * c_reflect;
+                #endif
             }
         }
+#endif
 
+#ifndef REFRACT_OFF
         if(onRefraction && ray.refractDepth == 0) {
             if(resRefract.val[0] == 0 && resRefract.val[1] == 0 && resRefract.val[2] == 0) {
-                res = res * 0.8;
-            }
-            else {
-                res = resRefract + res * 0.2;
+                resTemp += res * c_transmit;
+            } else {
+                resTemp += resRefract * c_transmit + res * (1 - c_transmit);
             }
         } 
+#endif
+
+        if(onReflection || onRefraction)
+            res = resTemp;
 
 		for (int i = 0; i < 3; i++)
 			if (res.val[i] > 1) res.val[i] = 1;
@@ -178,6 +207,9 @@ private:
 	float 	m_kd;    ///< diffuse reflection coefficients
 	float 	m_ks;    ///< specular refelection coefficients
 	float 	m_ke;    ///< shininess exponent
+
+    const float c_reflect = 0.2; // reflection coefficient
+    const float c_transmit = 0.8; // transmission coefficient
     const int MAX_REFLECT_DEPTH = 2;
-    const int MAX_REFRACT_DEPTH = 3;
+    const int MAX_REFRACT_DEPTH = 5;
 };
