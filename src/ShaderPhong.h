@@ -58,7 +58,6 @@ public:
 
         // now we use the reflection vector to create a new ray at the point of intersection:
         if(!isOpaque) {
-        // if(!isOpaque && 0==1) {
             onReflection = true;
 
             Ray rayReflect;
@@ -72,16 +71,49 @@ public:
             }else {
                 onReflection = false;
             }
-
-            if(rayReflect.t == std::numeric_limits<float>::infinity())
-                onReflection = false;
         }
 
         if(onReflection && ray.reflectDepth != 0) {
             return resReflect;
         }
 
+        /**
+         * For Refraction
+        */
+        float nAir = 1, nGlass = 1.5;
+        Vec3f resRefract(0, 0, 0);
+        bool onRefraction = false;
 
+        if(!isOpaque) {
+            onRefraction = true;
+            Vec3f refrNormal = normal;
+            float nDotI = refrNormal.dot(ray.dir); 
+
+            // since normal was negated in the beginning, nDoI is always < 0
+            nDotI = -nDotI;
+
+            if(ray.refractDepth % 2 == 1) {
+                std::swap(nAir, nGlass);
+            }
+
+            float n = nAir / nGlass;
+
+            Ray refractRay;
+            refractRay.org = ray.org + ray.t * ray.dir;
+            refractRay.dir = normalize(n * (ray.dir + refrNormal * nDotI) - refrNormal * sqrt(1 - pow(n, 2) * (1 - pow(nDotI, 2))));
+            refractRay.t = std::numeric_limits<float>::infinity();
+            refractRay.refractDepth = ray.refractDepth + 1;
+
+            if(ray.refractDepth <= MAX_REFRACT_DEPTH) {
+                resRefract = m_scene.RayTrace(refractRay);
+            } else {
+                onRefraction = false;
+            }
+        }
+
+        if(onRefraction && ray.refractDepth != 0) {
+            return resRefract;
+        }
 
 		// iterate over all light sources
 		for (auto pLight : m_scene.m_vpLights)
@@ -93,8 +125,9 @@ public:
 					float cosLightNormal = shadow.dir.dot(normal);
 					if (cosLightNormal > 0) {
 						if (m_scene.Occluded(shadow)) {
-                            if(shadow.hit->getShader().get()->getIsOpaque()) 
-                                continue;
+                            continue;
+                            // if(shadow.hit->getShader().get()->getIsOpaque()) 
+                            // if(pLight->getILightType().compare("LightArea") == 0)
                         }
 
 						Vec3f diffuseColor = m_kd * color;
@@ -114,8 +147,23 @@ public:
 			res /= nAreaSamples;
 
         if(onReflection && ray.reflectDepth == 0) {
-            res = resReflect + 0.2 * res;
+            // res = resReflect + 0.2 * res;
+            if(resReflect.val[0] == 0 && resReflect.val[1] == 0 && resReflect.val[2] == 0) {
+                res = res * 0.8;
+            }
+            else {
+                res = resReflect + res * 0.2;
+            }
         }
+
+        if(onRefraction && ray.refractDepth == 0) {
+            if(resRefract.val[0] == 0 && resRefract.val[1] == 0 && resRefract.val[2] == 0) {
+                res = res * 0.8;
+            }
+            else {
+                res = resRefract + res * 0.2;
+            }
+        } 
 
 		for (int i = 0; i < 3; i++)
 			if (res.val[i] > 1) res.val[i] = 1;
@@ -131,5 +179,5 @@ private:
 	float 	m_ks;    ///< specular refelection coefficients
 	float 	m_ke;    ///< shininess exponent
     const int MAX_REFLECT_DEPTH = 2;
-    const int MAX_REFRACT_DEPTH = 1;
+    const int MAX_REFRACT_DEPTH = 3;
 };
