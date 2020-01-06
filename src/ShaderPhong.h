@@ -128,6 +128,7 @@ public:
         }
 
         #ifdef REFLECT_OFF
+            // For Problem 5.2
             if(onRefraction && ray.refractDepth != 0) {
                 return res * (1 - c_transmit) + resRefract * c_transmit;
             }
@@ -154,6 +155,7 @@ public:
         }
 
         #ifdef REFRACT_OFF
+            // For Problem 5.1
             if(onReflection && ray.reflectDepth != 0) {
                 return resReflect;
             }
@@ -163,6 +165,7 @@ public:
         Vec3f resTemp(0, 0, 0);
 
 #if !defined(REFLECT_OFF) && !defined(REFRACT_OFF)
+        // Reflection and Refraction at depth > 0. 
         if(onReflection || onRefraction) {
             if(ray.reflectDepth > 0 || ray.refractDepth > 0)
                 return (1 - c_transmit) * res +  c_reflect * resReflect + c_transmit * resRefract;
@@ -170,6 +173,7 @@ public:
 #endif
 
 #ifndef REFLECT_OFF
+        // handle reflection shade at recursion base
         if(onReflection && ray.reflectDepth == 0) {
             if(resReflect.val[0] == 0 && resReflect.val[1] == 0 && resReflect.val[2] == 0) {
                 resTemp += res * (1 - c_reflect);
@@ -184,6 +188,7 @@ public:
 #endif
 
 #ifndef REFRACT_OFF
+        // handle refraction shade at recursion base
         if(onRefraction && ray.refractDepth == 0) {
             if(resRefract.val[0] == 0 && resRefract.val[1] == 0 && resRefract.val[2] == 0) {
                 resTemp += res * c_transmit;
