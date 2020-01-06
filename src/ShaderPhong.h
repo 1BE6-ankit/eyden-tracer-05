@@ -53,6 +53,35 @@ public:
 		Ray shadow;
 		shadow.org = ray.org + ray.t * ray.dir;
 
+		// iterate over all light sources
+		for (auto pLight : m_scene.m_vpLights)
+			for(int s = 0; s < nAreaSamples; s++) {	// TODO: make the sampling to depend on the light source type
+				// get direction to light, and intensity
+				std::optional<Vec3f> lightIntensity = pLight->Illuminate(shadow);
+				if (lightIntensity) {
+					// diffuse term
+					float cosLightNormal = shadow.dir.dot(normal);
+					if (cosLightNormal > 0) {
+						if (m_scene.Occluded(shadow)) {
+                            continue;
+                        }
+
+						Vec3f diffuseColor = m_kd * color;
+						res += (diffuseColor * cosLightNormal).mul(lightIntensity.value());
+					}
+
+					// specular term
+					float cosLightReflect = shadow.dir.dot(reflect);
+					if (cosLightReflect > 0) {
+						Vec3f specularColor = m_ks * RGB(1, 1, 1); // white highlight;
+						res += (specularColor * powf(cosLightReflect, m_ke)).mul(lightIntensity.value());
+					}
+				}
+			}
+
+		if (nAreaSamples > 1)
+			res /= nAreaSamples;
+
         /**
          * For Refraction
         */
@@ -78,8 +107,6 @@ public:
             Ray refractRay;
             refractRay.org = ray.org + ray.t * ray.dir;
             refractRay.t = std::numeric_limits<float>::infinity();
-            refractRay.refractDepth = ray.refractDepth + 1;
-            refractRay.reflectDepth = ray.reflectDepth + 1;
 
             // part of formula to calculate refracted ray direction
             float sqrtVal = sqrt(1 - pow(n, 2) * (1 - pow(nDotI, 2))); 
@@ -87,11 +114,14 @@ public:
             if(isnan(sqrtVal) ) {
                 // total internal reflection
                 onIntReflection = true;
-                // onRefraction = false;
                 refractRay.dir = reflect;
+                refractRay.refractDepth = ray.refractDepth + 2;
+                refractRay.reflectDepth = ray.reflectDepth + 1;
             } else {
                 // use the formula to calculate direction vector of the refraction ray
                 refractRay.dir = normalize(n * (ray.dir + refrNormal * nDotI) - refrNormal * sqrtVal);
+                refractRay.refractDepth = ray.refractDepth + 1;
+                refractRay.reflectDepth = ray.reflectDepth;
             }
 
             resRefract = m_scene.RayTrace(refractRay);
@@ -99,7 +129,7 @@ public:
 
         #ifdef REFLECT_OFF
             if(onRefraction && ray.refractDepth != 0) {
-                return resRefract;
+                return res * (1 - c_transmit) + resRefract * c_transmit;
             }
         #endif
 #endif
@@ -130,43 +160,12 @@ public:
         #endif
 #endif
 
-		// iterate over all light sources
-		for (auto pLight : m_scene.m_vpLights)
-			for(int s = 0; s < nAreaSamples; s++) {	// TODO: make the sampling to depend on the light source type
-				// get direction to light, and intensity
-				std::optional<Vec3f> lightIntensity = pLight->Illuminate(shadow);
-				if (lightIntensity) {
-					// diffuse term
-					float cosLightNormal = shadow.dir.dot(normal);
-					if (cosLightNormal > 0) {
-						if (m_scene.Occluded(shadow)) {
-                            continue;
-                            // if(shadow.hit->getShader().get()->getIsOpaque()) 
-                            // if(pLight->getILightType().compare("LightArea") == 0)
-                        }
-
-						Vec3f diffuseColor = m_kd * color;
-						res += (diffuseColor * cosLightNormal).mul(lightIntensity.value());
-					}
-
-					// specular term
-					float cosLightReflect = shadow.dir.dot(reflect);
-					if (cosLightReflect > 0) {
-						Vec3f specularColor = m_ks * RGB(1, 1, 1); // white highlight;
-						res += (specularColor * powf(cosLightReflect, m_ke)).mul(lightIntensity.value());
-					}
-				}
-			}
-
-		if (nAreaSamples > 1)
-			res /= nAreaSamples;
-
         Vec3f resTemp(0, 0, 0);
 
 #if !defined(REFLECT_OFF) && !defined(REFRACT_OFF)
         if(onReflection || onRefraction) {
             if(ray.reflectDepth > 0 || ray.refractDepth > 0)
-                return c_reflect * resReflect + c_transmit * resRefract;
+                return (1 - c_transmit) * res +  c_reflect * resReflect + c_transmit * resRefract;
         }
 #endif
 
